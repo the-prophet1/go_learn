@@ -42,7 +42,7 @@ func tracebackinit() {
 	// Instead of initializing the variables above in the declarations,
 	// schedinit calls this function so that the variables are
 	// initialized and available earlier in the startup sequence.
-	skipPC = funcPC(skipPleaseUseCallersFrames)
+	skipPC = funcPC(skipPleaseUseCallersFrames) //将skipPleaseUseCallersFrames的地址入口设置到全局变量:skipPC
 }
 
 // Traceback over the deferred function calls.

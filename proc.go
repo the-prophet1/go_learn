@@ -536,8 +536,8 @@ func schedinit() { //
 
 	sched.maxmcount = 10000 //设置调度器允许的最大的m数量
 
-	tracebackinit()
-	moduledataverify()
+	tracebackinit()    //此处是skipPC的值
+	moduledataverify() //
 	stackinit()
 	mallocinit()
 	mcommoninit(_g_.m)
