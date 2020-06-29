@@ -57,10 +57,11 @@ func argv_index(argv **byte, i int32) *byte {
 	return *(**byte)(add(unsafe.Pointer(argv), uintptr(i)*sys.PtrSize))
 }
 
+//将命令行参数赋值给全局变量argc,argv
 func args(c int32, v **byte) {
 	argc = c
 	argv = v
-	sysargs(c, v)
+	sysargs(c, v) //在windows环境下此函数啥也不做，在linux环境下调用的函数在:os_linux.go
 }
 
 func goargs() {
@@ -133,8 +134,9 @@ func testAtomic64() {
 	}
 }
 
+//对go中的类型声明以及原子操作运算等进行检查
 func check() {
-	var (
+	var ( //声明go语言中各个数据类型
 		a     int8
 		b     uint8
 		c     int16
@@ -158,7 +160,7 @@ func check() {
 	}
 	var x1 x1t
 	var y1 y1t
-
+	//校验每个类型的大小是否符合go规定的大小预期
 	if unsafe.Sizeof(a) != 1 {
 		throw("bad a")
 	}
@@ -204,13 +206,14 @@ func check() {
 	if unsafe.Sizeof(y1) != 2 {
 		throw("bad unsafe.Sizeof y1")
 	}
-
+	//测试除法,v为除数，div为被除数，返回值为商，e为余数
 	if timediv(12345*1000000000+54321, 1000000000, &e) != 12345 || e != 54321 {
 		throw("bad timediv")
 	}
 
 	var z uint32
 	z = 1
+	//检查cas原子操作
 	if !atomic.Cas(&z, 1, 2) {
 		throw("cas1")
 	}

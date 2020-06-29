@@ -186,7 +186,7 @@ var addrspace_vec [1]byte
 
 func mincore(addr unsafe.Pointer, n uintptr, dst *byte) int32
 
-func sysargs(argc int32, argv **byte) {
+func sysargs(argc int32, argv **byte) { //获取系统参数信息
 	n := argc + 1
 
 	// skip over argv, envp to get to auxv
@@ -287,8 +287,8 @@ func getHugePageSize() uintptr {
 }
 
 func osinit() {
-	ncpu = getproccount()
-	physHugePageSize = getHugePageSize()
+	ncpu = getproccount()                //获取cpu数
+	physHugePageSize = getHugePageSize() //获取大页的大小,一般大小为2M
 }
 
 var urandom_dev = []byte("/dev/urandom\x00")
