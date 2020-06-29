@@ -526,15 +526,15 @@ func cpuinit() {
 //	call runtime·mstart
 //
 // The new G calls runtime·main.
-func schedinit() {
+func schedinit() { //
 	// raceinit must be the first call to race detector.
 	// In particular, it must be done before mallocinit below calls racemapshadow.
-	_g_ := getg()
-	if raceenabled {
+	_g_ := getg()    //getg()对应的伪码实现是： _g_ := fs[0],此时的fs[0] = g0,所以是获取当前线程的g0
+	if raceenabled { //此处是对go的数据竞争检测功能的初始化，此处暂时不需要
 		_g_.racectx, raceprocctx0 = raceinit()
 	}
 
-	sched.maxmcount = 10000
+	sched.maxmcount = 10000 //设置调度器允许的最大的m数量
 
 	tracebackinit()
 	moduledataverify()
