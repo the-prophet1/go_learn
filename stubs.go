@@ -53,6 +53,50 @@ func mcall(fn func(*g))
 //go:noescape
 func systemstack(fn func())
 
+/*
+systemstack的伪码实现:
+func systemstack(fn func()){
+	g := getg()
+	m := g.m
+	if m.gsignal == g {
+		goto exec
+	}
+	g0 := m.g0
+	if g0 == g {
+		goto exec
+	}
+	if m.curg != g {
+		goto err
+	}
+
+	g.sched.pc = RET汇编指令
+	g.sched.sp = rsp寄存器的值
+	g.sched.g =	g
+	g.sched.bp = rbp寄存器的值
+
+	m0.tls[0] = g0		//将线程本地存储值改成g0
+	g0sp := g0.sched.sp
+	g0sp = g0sp - 8
+	funcStart := mstart
+	*g0sp = funcStart
+	sp寄存器 = g0sp
+
+	fn()			//执行fn函数
+	.....
+	后续将fs[0]转回到g
+	.....
+	return
+
+exec:
+	//如果获取的g是g0或gsignal则直接执行fn()
+	fn()
+err:
+	g即不是g0,g也不是m.gsignal,g也不是m.curg
+	发生不可预测的错误
+	abort
+}
+*/
+
 var badsystemstackMsg = "fatal: systemstack called from unexpected goroutine"
 
 //go:nosplit

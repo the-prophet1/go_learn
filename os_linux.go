@@ -289,7 +289,7 @@ func getHugePageSize() uintptr {
 func osinit() {
 	ncpu = getproccount()                //获取cpu数
 	physHugePageSize = getHugePageSize() //获取大页的大小,一般大小为2M
-}
+} //执行完后返回到汇编:449e80
 
 var urandom_dev = []byte("/dev/urandom\x00")
 

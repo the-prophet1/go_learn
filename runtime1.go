@@ -62,7 +62,7 @@ func args(c int32, v **byte) {
 	argc = c
 	argv = v
 	sysargs(c, v) //在windows环境下此函数啥也不做，在linux环境下调用的函数在:os_linux.go
-}
+} //执行完返回到汇编代码：449e7b
 
 func goargs() {
 	if GOOS == "windows" {

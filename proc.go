@@ -526,7 +526,7 @@ func cpuinit() {
 //	call runtime·mstart
 //
 // The new G calls runtime·main.
-func schedinit() { //
+func schedinit() {
 	// raceinit must be the first call to race detector.
 	// In particular, it must be done before mallocinit below calls racemapshadow.
 	_g_ := getg()    //getg()对应的伪码实现是： _g_ := fs[0],此时的fs[0] = g0,所以是获取当前线程的g0
@@ -536,31 +536,31 @@ func schedinit() { //
 
 	sched.maxmcount = 10000 //设置调度器允许的最大的m数量
 
-	tracebackinit()    //此处是skipPC的值
-	moduledataverify() //
-	stackinit()
-	mallocinit()
-	mcommoninit(_g_.m)
-	cpuinit()       // must run before alginit
-	alginit()       // maps must not be used before this call
-	modulesinit()   // provides activeModules
-	typelinksinit() // uses maps, activeModules
-	itabsinit()     // uses activeModules
+	tracebackinit()    //此处初始化skipPC的值
+	moduledataverify() //校验进程的指向文件布局信息
+	stackinit()        //初始化全局的栈
+	mallocinit()       //初始化堆的内存
+	mcommoninit(_g_.m) //对全局变量m0进行初始化
+	cpuinit()          // must run before alginit
+	alginit()          // maps must not be used before this call
+	modulesinit()      // provides activeModules
+	typelinksinit()    // uses maps, activeModules
+	itabsinit()        // uses activeModules
 
-	msigsave(_g_.m)
+	msigsave(_g_.m) //初始化m的信号掩码
 	initSigmask = _g_.m.sigmask
 
-	goargs()
-	goenvs()
-	parsedebugvars()
-	gcinit()
+	goargs()         //将argv拷贝到全局变量argslice
+	goenvs()         //将argv + 1拷贝到全局变量evns
+	parsedebugvars() //解析debug的配置参数，目前没有
+	gcinit()         //对垃圾回收器进行初始化
 
 	sched.lastpoll = uint64(nanotime())
 	procs := ncpu
 	if n, ok := atoi32(gogetenv("GOMAXPROCS")); ok && n > 0 {
 		procs = n
 	}
-	if procresize(procs) != nil {
+	if procresize(procs) != nil { //此处对allp进行初始化
 		throw("unknown runnable goroutine during bootstrap")
 	}
 
@@ -585,7 +585,7 @@ func schedinit() { //
 		// to ensure runtime·modinfo is kept in the resulting binary.
 		modinfo = ""
 	}
-}
+} //执行完后返回到汇编:449e85
 
 func dumpgstatus(gp *g) {
 	_g_ := getg()
@@ -605,7 +605,7 @@ func mcommoninit(mp *m) {
 	_g_ := getg()
 
 	// g0 stack won't make sense for user (and is not necessary unwindable).
-	if _g_ != _g_.m.g0 {
+	if _g_ != _g_.m.g0 { //初始化过程中 _g_ 是等于 _g_.m.g0
 		callers(1, mp.createstack[:])
 	}
 
@@ -615,7 +615,7 @@ func mcommoninit(mp *m) {
 	}
 	mp.id = sched.mnext
 	sched.mnext++
-	checkmcount()
+	checkmcount() //检查m的个数是否超过限制
 
 	mp.fastrand[0] = 1597334677 * uint32(mp.id)
 	mp.fastrand[1] = uint32(cputicks())
@@ -623,18 +623,18 @@ func mcommoninit(mp *m) {
 		mp.fastrand[1] = 1
 	}
 
-	mpreinit(mp)
+	mpreinit(mp) //初始化一个信号处理的g
 	if mp.gsignal != nil {
 		mp.gsignal.stackguard1 = mp.gsignal.stack.lo + _StackGuard
 	}
-
+	//最主要的操作
 	// Add to allm so garbage collector doesn't free g->m
 	// when it is just in a register or thread-local storage.
 	mp.alllink = allm
 
 	// NumCgoCall() iterates over allm w/o schedlock,
 	// so we need to publish it safely.
-	atomicstorep(unsafe.Pointer(&allm), unsafe.Pointer(mp))
+	atomicstorep(unsafe.Pointer(&allm), unsafe.Pointer(mp)) //将m添加到allm中
 	unlock(&sched.lock)
 
 	// Allocate memory to hold a cgo traceback if the cgo call crashes.
@@ -3248,11 +3248,11 @@ func malg(stacksize int32) *g {
 // are available sequentially after &fn; they would not be
 // copied if a stack split occurred.
 //go:nosplit
-func newproc(siz int32, fn *funcval) {
-	argp := add(unsafe.Pointer(&fn), sys.PtrSize)
-	gp := getg()
-	pc := getcallerpc()
-	systemstack(func() {
+func newproc(siz int32, fn *funcval) { //初始化时：siz = 0，fn = runtime.main()
+	argp := add(unsafe.Pointer(&fn), sys.PtrSize) //获取fn函数的参数
+	gp := getg()                                  //初始化时：gp = g0
+	pc := getcallerpc()                           //此函数功能是把call newproc后的汇编指令地址赋值给pc
+	systemstack(func() {                          //此处当前线程所在的栈是g0，所以直接执行newproc1
 		newproc1(fn, (*uint8)(argp), siz, gp, pc)
 	})
 }
@@ -3260,8 +3260,9 @@ func newproc(siz int32, fn *funcval) {
 // Create a new g running fn with narg bytes of arguments starting
 // at argp. callerpc is the address of the go statement that created
 // this. The new g is put on the queue of g's waiting to run.
+//fn: 需要执行的函数，arpg:函数第一个参数地址，narg:参数的长度(字节),callergp:调用newproc的g,callerpc:调用newproc的pc寄存器的值
 func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintptr) {
-	_g_ := getg()
+	_g_ := getg() //在初始化过程中，此处获得的g是g0
 
 	if fn == nil {
 		_g_.m.throwing = -1 // do not dump full stacks
@@ -3279,11 +3280,14 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 		throw("newproc: function arguments too large for new goroutine")
 	}
 
-	_p_ := _g_.m.p.ptr()
-	newg := gfget(_p_)
+	_p_ := _g_.m.p.ptr() // 由图4可知: allp[0] = g0->m->p, _p_ = allp
+	newg := gfget(_p_)   //从p[0]中获一个g，初始化没有g所以gp = nil
 	if newg == nil {
+		//从堆中分配一块内存来给newg当做栈，并设置g.stack和g.stackguard0、g.stackguard1
 		newg = malg(_StackMin)
+		//将newg.atomicstatus设置为dead
 		casgstatus(newg, _Gidle, _Gdead)
+		//将newg加入到全局变量allg中
 		allgadd(newg) // publishes with a g->status of Gdead so GC scanner doesn't look at uninitialized stack.
 	}
 	if newg.stack.hi == 0 {
@@ -4004,7 +4008,7 @@ func procresize(nprocs int32) *p {
 	sched.procresizetime = now
 
 	// Grow allp if necessary.
-	if nprocs > int32(len(allp)) {
+	if nprocs > int32(len(allp)) { //调整p的个数,这里的nprocs是cpu个数
 		// Synchronize with retake, which could be running
 		// concurrently since it doesn't run on a P.
 		lock(&allpLock)
@@ -4030,7 +4034,7 @@ func procresize(nprocs int32) *p {
 		atomicstorep(unsafe.Pointer(&allp[i]), unsafe.Pointer(pp))
 	}
 
-	_g_ := getg()
+	_g_ := getg() //线程局部存储的g0
 	if _g_.m.p != 0 && _g_.m.p.ptr().id < nprocs {
 		// continue to use the current P
 		_g_.m.p.ptr().status = _Prunning
@@ -4056,7 +4060,7 @@ func procresize(nprocs int32) *p {
 		p := allp[0]
 		p.m = 0
 		p.status = _Pidle
-		acquirep(p)
+		acquirep(p) //allp[0]
 		if trace.enabled {
 			traceGoStart()
 		}
@@ -4082,8 +4086,8 @@ func procresize(nprocs int32) *p {
 		if _g_.m.p.ptr() == p {
 			continue
 		}
-		p.status = _Pidle
-		if runqempty(p) {
+		p.status = _Pidle //将p的状态设置为空闲
+		if runqempty(p) { //初始化时,除了allp[0]其它p放入空闲链表
 			pidleput(p)
 		} else {
 			p.m.set(mget())
@@ -4105,7 +4109,7 @@ func procresize(nprocs int32) *p {
 //go:yeswritebarrierrec
 func acquirep(_p_ *p) {
 	// Do the part that isn't allowed to have write barriers.
-	wirep(_p_)
+	wirep(_p_) //此处将allp[0]与m0进行的关联
 
 	// Have p; write barriers now allowed.
 
@@ -4139,8 +4143,8 @@ func wirep(_p_ *p) {
 		throw("wirep: invalid p state")
 	}
 	_g_.m.mcache = _p_.mcache
-	_g_.m.p.set(_p_)
-	_p_.m.set(_g_.m)
+	_g_.m.p.set(_p_) //g0->m0->allp[0]
+	_p_.m.set(_g_.m) //allp[0]->m[0]
 	_p_.status = _Prunning
 }
 
