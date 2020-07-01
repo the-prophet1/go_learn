@@ -3255,7 +3255,7 @@ func newproc(siz int32, fn *funcval) { //初始化时：siz = 0，fn = runtime.m
 	systemstack(func() {                          //此处当前线程所在的栈是g0，所以直接执行newproc1
 		newproc1(fn, (*uint8)(argp), siz, gp, pc)
 	})
-}
+} //初始化，返回到汇编语言:449e94
 
 // Create a new g running fn with narg bytes of arguments starting
 // at argp. callerpc is the address of the go statement that created
@@ -3297,7 +3297,7 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 	if readgstatus(newg) != _Gdead {
 		throw("newproc1: new g is not Gdead")
 	}
-
+	//调整sp寄存器指向的位置
 	totalSize := 4*sys.RegSize + uintptr(siz) + sys.MinFrameSize // extra space in case of reads slightly beyond frame
 	totalSize += -totalSize & (sys.SpAlign - 1)                  // align to spAlign
 	sp := newg.stack.hi - totalSize
@@ -3308,7 +3308,7 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 		prepGoExitFrame(sp)
 		spArg += sys.MinFrameSize
 	}
-	if narg > 0 {
+	if narg > 0 { //如果函数包含入参，初始化入参为0
 		memmove(unsafe.Pointer(spArg), unsafe.Pointer(argp), uintptr(narg))
 		// This is a stack-to-stack copy. If write barriers
 		// are enabled and the source stack is grey (the
@@ -3326,15 +3326,18 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 			}
 		}
 	}
-
+	//相当于使用C函数:bzero(ptr,len)
 	memclrNoHeapPointers(unsafe.Pointer(&newg.sched), unsafe.Sizeof(newg.sched))
+	//设置newg.sched。
 	newg.sched.sp = sp
 	newg.stktopsp = sp
+	//将newg的pc指令寄存器指向goexit的下一条指令
 	newg.sched.pc = funcPC(goexit) + sys.PCQuantum // +PCQuantum so that previous instruction is in same function
 	newg.sched.g = guintptr(unsafe.Pointer(newg))
 	gostartcallfn(&newg.sched, fn)
 	newg.gopc = callerpc
 	newg.ancestors = saveAncestors(callergp)
+	//设置newg的startpc，
 	newg.startpc = fn.fn
 	if _g_.m.curg != nil {
 		newg.labels = _g_.m.curg.labels
@@ -3343,6 +3346,7 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 		atomic.Xadd(&sched.ngsys, +1)
 	}
 	newg.gcscanvalid = false
+	//设置newg的状态为_Grunnable，表示这个g代表的goroutine可以运行了
 	casgstatus(newg, _Gdead, _Grunnable)
 
 	if _p_.goidcache == _p_.goidcacheend {
@@ -3361,6 +3365,7 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 	if trace.enabled {
 		traceGoCreate(newg, newg.startpc)
 	}
+	//把newg放入_p_的运行队列，初始化的时候一定是p的本地运行队列，其它时候可能因为本地队列满了而放入全局队列
 	runqput(_p_, newg, true)
 
 	if atomic.Load(&sched.npidle) != 0 && atomic.Load(&sched.nmspinning) == 0 && mainStarted {

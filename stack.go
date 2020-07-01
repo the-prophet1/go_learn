@@ -1070,7 +1070,7 @@ func nilfunc() {
 func gostartcallfn(gobuf *gobuf, fv *funcval) {
 	var fn unsafe.Pointer
 	if fv != nil {
-		fn = unsafe.Pointer(fv.fn)
+		fn = unsafe.Pointer(fv.fn) //初始化时fv = runtime.main
 	} else {
 		fn = unsafe.Pointer(funcPC(nilfunc))
 	}
