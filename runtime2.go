@@ -312,8 +312,8 @@ type gobuf struct {
 	// and restores it doesn't need write barriers. It's still
 	// typed as a pointer so that any other writes from Go get
 	// write barriers.
-	sp   uintptr
-	pc   uintptr
+	sp   uintptr //记录当前g的sp寄存器的值(sp寄存器:指向栈的栈顶)
+	pc   uintptr //记录当前g的pc寄存器的值(pc寄存器：当调度到该g的时候执行的指令)
 	g    guintptr
 	ctxt unsafe.Pointer
 	ret  sys.Uintreg

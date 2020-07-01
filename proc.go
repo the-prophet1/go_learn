@@ -1144,10 +1144,10 @@ func startTheWorldWithSema(emitTraceEvent bool) int64 {
 //go:nosplit
 //go:nowritebarrierrec
 func mstart() {
-	_g_ := getg()
+	_g_ := getg() //初始化时获取g0
 
 	osStack := _g_.stack.lo == 0
-	if osStack {
+	if osStack { //启动时，栈已经初始化
 		// Initialize stack bounds from system stack.
 		// Cgo may have left stack size in stack.hi.
 		// minit may update the stack bounds.
@@ -1164,7 +1164,7 @@ func mstart() {
 	// This is the g0, so we can also call go:systemstack
 	// functions, which check stackguard1.
 	_g_.stackguard1 = _g_.stackguard0
-	mstart1()
+	mstart1() //继续调用mstart1
 
 	// Exit this thread.
 	if GOOS == "windows" || GOOS == "solaris" || GOOS == "illumos" || GOOS == "plan9" || GOOS == "darwin" || GOOS == "aix" {
@@ -1174,10 +1174,10 @@ func mstart() {
 		osStack = true
 	}
 	mexit(osStack)
-}
+} //返回汇编代码:449e9b(正常来说不会退出)
 
 func mstart1() {
-	_g_ := getg()
+	_g_ := getg() //启动时获得的是g0
 
 	if _g_ != _g_.m.g0 {
 		throw("bad runtime·mstart")
@@ -1187,17 +1187,19 @@ func mstart1() {
 	// for terminating the thread.
 	// We're never coming back to mstart1 after we call schedule,
 	// so other calls can reuse the current frame.
-	save(getcallerpc(), getcallersp())
-	asminit()
-	minit()
+	//getcallerpc:获取mstart1返回的地址
+	//getcallersp:获取调用mstart1的栈顶地址
+	save(getcallerpc(), getcallersp()) //此函数很重要，是用来保存调度信息的重要函数
+	asminit()                          //该函数在AMD64不做任何事情
+	minit()                            //对信号初始化，启动过场暂不关注
 
 	// Install signal handlers; after minit so that minit can
 	// prepare the thread to be able to handle the signals.
 	if _g_.m == &m0 {
-		mstartm0()
+		mstartm0() //对信号初始化
 	}
 
-	if fn := _g_.m.mstartfn; fn != nil {
+	if fn := _g_.m.mstartfn; fn != nil { //启动过程fn为nil
 		fn()
 	}
 
@@ -1205,7 +1207,7 @@ func mstart1() {
 		acquirep(_g_.m.nextp.ptr())
 		_g_.m.nextp = 0
 	}
-	schedule()
+	schedule() //进行goroutine调度
 }
 
 // mstartm0 implements part of mstart1 that only runs on the m0.
@@ -2459,7 +2461,7 @@ func injectglist(glist *gList) {
 // One round of scheduler: find a runnable goroutine and execute it.
 // Never returns.
 func schedule() {
-	_g_ := getg()
+	_g_ := getg() //_g_ = 每个工作线程m对应的g0，初始化时是m0的g0
 
 	if _g_.m.locks != 0 {
 		throw("schedule: holding locks")
@@ -2738,8 +2740,8 @@ func goexit0(gp *g) {
 func save(pc, sp uintptr) {
 	_g_ := getg()
 
-	_g_.sched.pc = pc
-	_g_.sched.sp = sp
+	_g_.sched.pc = pc //再次运行时的指令地址
+	_g_.sched.sp = sp //再次运行时的栈顶
 	_g_.sched.lr = 0
 	_g_.sched.ret = 0
 	_g_.sched.g = guintptr(unsafe.Pointer(_g_))
@@ -3372,6 +3374,8 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
 		wakep()
 	}
 	releasem(_g_.m)
+
+	//程序初始化运行到这里，其进程如:图5
 }
 
 // saveAncestors copies previous ancestors of the given caller g and
