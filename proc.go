@@ -111,7 +111,7 @@ var initSigmask sigset
 
 // The main goroutine.
 func main() {
-	g := getg()
+	g := getg() //获取当前的g = main goroutine，此时的g不再是g0
 
 	// Racectx of m0->g0 is used only as the parent of the main goroutine.
 	// It must not be used for anything else.
@@ -121,7 +121,7 @@ func main() {
 	// Using decimal instead of binary GB and MB because
 	// they look nicer in the stack overflow failure message.
 	if sys.PtrSize == 8 {
-		maxstacksize = 1000000000
+		maxstacksize = 1000000000 //设置最大的栈大小
 	} else {
 		maxstacksize = 250000000
 	}
@@ -130,8 +130,8 @@ func main() {
 	mainStarted = true
 
 	if GOARCH != "wasm" { // no threads on wasm yet, so no sysmon
-		systemstack(func() {
-			newm(sysmon, nil)
+		systemstack(func() { //切换到g0栈执行newm
+			newm(sysmon, nil) //创建一个newm
 		})
 	}
 
@@ -143,7 +143,7 @@ func main() {
 	// to preserve the lock.
 	lockOSThread()
 
-	if g.m != &m0 {
+	if g.m != &m0 { //确保当前m是m0
 		throw("runtime.main not on m0")
 	}
 
@@ -163,7 +163,7 @@ func main() {
 	// Record when the world started.
 	runtimeInitTime = nanotime()
 
-	gcenable()
+	gcenable() //启动垃圾回收器
 
 	main_init_done = make(chan bool)
 	if iscgo {
@@ -199,6 +199,7 @@ func main() {
 		// has a main, but it is not executed.
 		return
 	}
+	//这里调用main包里的main开始执行用户的代码
 	fn := main_main // make an indirect call, as the linker doesn't know the address of the main package when laying down the runtime
 	fn()
 	if raceenabled {
@@ -1187,11 +1188,11 @@ func mstart1() {
 	// for terminating the thread.
 	// We're never coming back to mstart1 after we call schedule,
 	// so other calls can reuse the current frame.
-	//getcallerpc:获取mstart1返回的地址
+	//getcallerpc:获取mstart1返回的地址,即mstart函数的下一行指令
 	//getcallersp:获取调用mstart1的栈顶地址
 	save(getcallerpc(), getcallersp()) //此函数很重要，是用来保存调度信息的重要函数
 	asminit()                          //该函数在AMD64不做任何事情
-	minit()                            //对信号初始化，启动过场暂不关注
+	minit()                            //对信号初始化，启动过程暂不关注
 
 	// Install signal handlers; after minit so that minit can
 	// prepare the thread to be able to handle the signals.
@@ -1207,7 +1208,7 @@ func mstart1() {
 		acquirep(_g_.m.nextp.ptr())
 		_g_.m.nextp = 0
 	}
-	schedule() //进行goroutine调度
+	schedule() //进行goroutine调度,即跳转到runtime.main
 }
 
 // mstartm0 implements part of mstart1 that only runs on the m0.
@@ -2139,15 +2140,16 @@ func gcstopm() {
 func execute(gp *g, inheritTime bool) {
 	_g_ := getg()
 
-	casgstatus(gp, _Grunnable, _Grunning)
+	casgstatus(gp, _Grunnable, _Grunning) //将gp由可运行转换为运行中
 	gp.waitsince = 0
 	gp.preempt = false
 	gp.stackguard0 = gp.stack.lo + _StackGuard
 	if !inheritTime {
 		_g_.m.p.ptr().schedtick++
 	}
-	_g_.m.curg = gp
-	gp.m = _g_.m
+	//将gp和m关联在一起
+	_g_.m.curg = gp //设置m当前运行的g为gp
+	gp.m = _g_.m    //同时将gp指向m
 
 	// Check whether the profiler needs to be turned on or off.
 	hz := sched.profilehz
@@ -2163,8 +2165,8 @@ func execute(gp *g, inheritTime bool) {
 		}
 		traceGoStart()
 	}
-
-	gogo(&gp.sched)
+	//gogo函数是由汇编实现:449ec0
+	gogo(&gp.sched) //切换调用栈，以及跳转到gp.sched.sp指定的地址执行代码
 }
 
 // Finds a runnable goroutine to execute.
@@ -2510,19 +2512,21 @@ top:
 		// Check the global runnable queue once in a while to ensure fairness.
 		// Otherwise two goroutines can completely occupy the local runqueue
 		// by constantly respawning each other.
+		//周期性的从全局的p队列中获取g
 		if _g_.m.p.ptr().schedtick%61 == 0 && sched.runqsize > 0 {
 			lock(&sched.lock)
-			gp = globrunqget(_g_.m.p.ptr(), 1)
+			gp = globrunqget(_g_.m.p.ptr(), 1) //从全局队列获取g
 			unlock(&sched.lock)
 		}
 	}
 	if gp == nil {
-		gp, inheritTime = runqget(_g_.m.p.ptr())
+		gp, inheritTime = runqget(_g_.m.p.ptr()) //从本地队列获取g
 		if gp != nil && _g_.m.spinning {
 			throw("schedule: spinning with local work")
 		}
 	}
 	if gp == nil {
+		//从其他队列中获取可运行的g,获取不到则sleep
 		gp, inheritTime = findrunnable() // blocks until work is available
 	}
 
@@ -2563,7 +2567,7 @@ top:
 		startlockedm(gp)
 		goto top
 	}
-
+	//启动过程中，当前使用的是g0的调用栈，执行该函数会将g0的栈切换到gp上
 	execute(gp, inheritTime)
 }
 
@@ -2744,7 +2748,7 @@ func save(pc, sp uintptr) {
 	_g_.sched.sp = sp //再次运行时的栈顶
 	_g_.sched.lr = 0
 	_g_.sched.ret = 0
-	_g_.sched.g = guintptr(unsafe.Pointer(_g_))
+	_g_.sched.g = guintptr(unsafe.Pointer(_g_)) //初始化过程此处保存的是g0
 	// We need to ensure ctxt is zero, but can't have a write
 	// barrier here. However, it should always already be zero.
 	// Assert that.
